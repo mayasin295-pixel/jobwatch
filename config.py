@@ -10,6 +10,7 @@ APP_URL = "https://mayasin295-pixel.github.io/jobwatch/"   # כפתור "פתח�
 MODEL = "claude-haiku-5-5"   # מודל זול ומהיר לדירוג
 MIN_SCORE_AI = 5             # סף התראה כשיש מפתח AI (1-10). 5 = התאמה סבירה
 MIN_SCORE_KW = 4             # סף כשאין AI
+ISRAEL_ONLY = True           # רק משרות בישראל
 MAX_PER_RUN = 20             # מקסימום התראות בכל הרצה (השאר ימתינו להרצה הבאה)
 MAX_AI_PER_RUN = 40          # הגבלת עלות
 
@@ -41,7 +42,6 @@ LINKEDIN_QUERIES = ["medical data analyst", "digital health project manager", "h
 LINKEDIN_SEARCHES = [
     ("Israel", "", ""),                                            # כל המשרות בישראל
     ("Israel", "&f_JT=P%2CC", "part-time or contract (search filter)"),   # חלקית / חוזה
-    ("Worldwide", "&f_WT=2&f_JT=P%2CC", "remote part-time or contract abroad"),  # מרחוק מחו"ל
 ]
 
 # חיפוש לפי שם ארגון (רץ ללא פילטרים, ומסונן אחר כך לפי כותרת)

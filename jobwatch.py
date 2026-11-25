@@ -139,6 +139,25 @@ SOURCES = [("linkedin", src_linkedin), ("drushim", src_drushim), ("greenhouse", 
 
 
 # ------------------------------ סינון ודירוג ------------------------------
+HEB = re.compile(r"[\u0590-\u05FF]")
+IL = ["israel", "ישראל", "tel aviv", "jerusalem", "haifa", "herzliya", "petah", "petach", "ramat gan", "rehovot",
+      "netanya", "kfar saba", "ra'anana", "raanana", "beer sheva", "be'er sheva", "rishon", "holon", "bnei brak",
+      "modi'in", "airport city", "hod hasharon", "yokneam", "rosh ha", "ashdod", "ashkelon", "givatayim",
+      "kiryat", "nazareth", "caesarea", "or yehuda", "yavne", "ness ziona", "tel hashomer"]
+
+
+def israel_ok(loc, desc=""):
+    """True אם המשרה בישראל (או שהמיקום לא ידוע)."""
+    if not getattr(C, "ISRAEL_ONLY", False):
+        return True
+    loc = (loc or "").strip()
+    if not loc:
+        return True
+    t = (loc + " " + (desc or "")[:300]).lower()
+    return bool(HEB.search(loc)) or any(w in t for w in IL)
+
+
+
 def relevant(j):
     t = j["title"].lower()
     return any(w in t for w in C.ROLE_TERMS) and not any(w in t for w in C.EXCLUDE_TERMS)
@@ -233,6 +252,11 @@ def main():
     state, now = load_state(), time.time()
     state["jobs"] = {k: v for k, v in state["jobs"].items() if now - v.get("ts", now) < 120 * 86400}
 
+    # משרות שמורות מחוץ לישראל מוסתרות
+    for v in state["jobs"].values():
+        if not israel_ok(v.get("l", "")):
+            v["closed"] = v["sent"] = True
+
     # איסוף
     found, keys = [], set()
     for name, fn in SOURCES:
@@ -247,6 +271,8 @@ def main():
             if k not in keys:
                 keys.add(k)
                 found.append(j)
+
+    found = [j for j in found if israel_ok(j["location"], j["desc"])]
 
     # דירוג חדשות
     new = [j for j in found if j["id"] not in state["jobs"] and relevant(j)]
