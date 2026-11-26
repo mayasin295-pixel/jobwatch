@@ -169,9 +169,20 @@ def has(j, terms):
 
 
 def kw_score(j):
-    part = has(j, C.PART_TERMS)
-    s = 3 + 2 * has(j, C.HEALTH_TERMS) + 2 * part + has(j, C.LOCAL_TERMS) + has(j, C.REMOTE_TERMS)
-    return {"score": min(s, 10), "reason": "", "part": part, "ai": False}
+    part, health = has(j, C.PART_TERMS), has(j, C.HEALTH_TERMS)
+    local, remote = has(j, C.LOCAL_TERMS), has(j, C.REMOTE_TERMS)
+    s = 3 + 2 * health + 2 * part + local + remote
+    fit = ["הכותרת תואמת תחום (אנליזה, פרויקטים, CRM או דאטה)"]
+    gap = []
+    if health: fit.append("בתחום הבריאות או החדשנות הרפואית")
+    else: gap.append("לא ברור שהתפקיד בתחום הבריאות")
+    if part: fit.append("מצוין שהמשרה חלקית או פרילנס")
+    else: gap.append("לא מצוין שהמשרה חלקית")
+    if local: fit.append("המיקום באזור המרכז")
+    if remote: fit.append("אפשרות להיברידי או עבודה מהבית")
+    if not (local or remote): gap.append("המיקום או ההיברידיות לא ברורים")
+    if len(j["desc"]) < 50: gap.append("אין תיאור מלא, הדירוג לפי הכותרת")
+    return {"score": min(s, 10), "reason": "", "fit": ", ".join(fit), "gap": ", ".join(gap), "part": part, "ai": False}
 
 
 def ai_score(j):
@@ -183,17 +194,18 @@ def ai_score(j):
               "דרגי 1-10 עד כמה כדאי לה לגשת למשרה הזו. שקלי: התאמה לניסיון, חברה טובה ומוניטין של אנשים ותרבות, "
               "עניין וייחודיות של התפקיד, תפקיד שטח (עבודה מול משתמשים/לקוחות בשטח, הטמעה, ליווי), "
               "וגם בונוס גדול לחדשנות ברפואה (סטארט־אפ או הייטק בריאות, דאטה אנליסט או ניהול פרויקטים), ובונוס על חלקית/פרילנס, בריאות/רפואה, היברידי/מרחוק וקרבה לאלעד. "
-              "תפקיד שגרתי ומשעמם = נמוך גם אם מתאים. התאמה סבירה = 5. החזירי JSON בלבד, בלי טקסט נוסף: "
-              '{"score": מספר, "reason": "עד 15 מילים בעברית", "part": true/false (חלקית או פרילנס)}')
+              "תפקיד שגרתי ומשעמם = נמוך גם אם מתאים. התאמה סבירה = 5. ציני רק מה שאפשר להסיק מהפרטים שניתנו, ואם חסר תיאור כתבי זאת. "
+              "החזירי JSON בלבד, בלי טקסט נוסף: "
+              '{"score": מספר, "fit": "מה מתאים לה, עד 25 מילים בעברית", "gap": "מה פחות מתאים או לא ברור, עד 25 מילים בעברית", "part": true/false (חלקית או פרילנס)}')
     try:
         r = requests.post("https://api.anthropic.com/v1/messages", timeout=60,
                           headers={"x-api-key": key, "anthropic-version": "2023-06-01",
                                    "content-type": "application/json"},
-                          json={"model": C.MODEL, "max_tokens": 200,
+                          json={"model": C.MODEL, "max_tokens": 400,
                                 "messages": [{"role": "user", "content": prompt}]})
         r.raise_for_status()
         d = json.loads(re.search(r"\{.*\}", r.json()["content"][0]["text"], re.S).group(0))
-        return {"score": int(d["score"]), "reason": str(d.get("reason", "")), "part": bool(d.get("part")) or has(j, C.PART_TERMS),
+        return {"score": int(d["score"]), "reason": "", "fit": str(d.get("fit", "")), "gap": str(d.get("gap", "")), "part": bool(d.get("part")) or has(j, C.PART_TERMS),
                 "ai": True}
     except Exception as e:
         log(f"  ! דירוג AI נכשל ({e}), משתמש בדירוג מילות מפתח")
@@ -221,8 +233,12 @@ def notify(j, res):
     topic = os.environ.get("NTFY_TOPIC", "").strip()
     star = "🌟 " if res["part"] else ""
     body = " · ".join(x for x in [j["company"], j["location"]] if x)
-    if res["reason"]:
+    if res.get("reason"):
         body += "\n" + res["reason"]
+    if res.get("fit"):
+        body += "\n✓ " + res["fit"]
+    if res.get("gap"):
+        body += "\n✗ " + res["gap"]
     payload = {"topic": topic, "title": f"{star}{res['score']}/10 · {j['title']}"[:200], "message": body or j["title"],
                "click": j["url"], "priority": 4 if res["part"] else 3,
                "tags": ["briefcase"] + (["star"] if res["part"] else [])}
@@ -287,7 +303,7 @@ def main():
             continue  # ימתין להרצה הבאה
         res = res or kw_score(j)
         state["jobs"][j["id"]] = {"t": j["title"], "c": j["company"], "u": j["url"], "l": j["location"],
-                                  "score": res["score"], "r": res["reason"], "part": res["part"],
+                                  "score": res["score"], "r": res["reason"], "f": res.get("fit", ""), "g": res.get("gap", ""), "part": res["part"],
                                   "ai": res["ai"], "sent": False, "ts": now}
 
     # שליחה: קודם חלקית/פרילנס, אחר כך לפי ציון
@@ -297,7 +313,7 @@ def main():
     sent = 0
     for i, v in pending[:C.MAX_PER_RUN]:
         j = job(v["t"], v["u"], v["c"], v["l"])
-        res = {"score": v["score"], "reason": v["r"], "part": v["part"]}
+        res = {"score": v["score"], "reason": v["r"], "fit": v.get("f", ""), "gap": v.get("g", ""), "part": v["part"]}
         if dry:
             log(f"  [{v['score']}{'*' if v['part'] else ''}] {v['t']} | {v['c']} | {v['l']} | {v['u']}")
             continue

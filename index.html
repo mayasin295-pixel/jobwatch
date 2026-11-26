@@ -109,7 +109,7 @@ function render(){
     L.append(h("article",{class:"card "+cls+(s!=="new"?" done":"")},
       h("div",{class:"score"},String(j.score),h("small",{},"מתוך 10")),
       h("div",{},h("h2",{},j.title),h("p",{class:"meta"},[j.company,j.location,j.ts?"נמצאה ב-"+date(j.ts):""].filter(Boolean).join(", ")),
-        j.reason?h("p",{class:"why"},j.reason):null,
+        j.fit?h("p",{class:"why"},h("b",{},"מתאים: "),j.fit):null,j.gap?h("p",{class:"why"},h("b",{},"פחות מתאים: "),j.gap):null,(!j.fit&&!j.gap&&j.reason)?h("p",{class:"why"},j.reason):null,
         h("div",{class:"tags"},j.innov?h("span",{class:"tag"},"חדשנות ברפואה"):null,j.part?h("span",{class:"tag p"},"חלקית או פרילנס"):null,s==="applied"?h("span",{class:"tag"},"הגשתי"):null,s==="saved"?h("span",{class:"tag"},"שמורה"):null),
         h("div",{class:"acts"},
           /^https:\/\//.test(j.url||"")?h("a",{href:j.url,target:"_blank",rel:"noopener"},"פתחי משרה"):null,
@@ -128,9 +128,9 @@ const err=e=>e&&e.message==="nokey"?"הוסיפי מפתח API בהגדרות.":
 
 $("#aGo").onclick=async()=>{const t=$("#aTxt").value.trim(),u=$("#aUrl").value.trim(),m=$("#aMsg");if(!t)return;
   $("#aGo").disabled=true;m.textContent="מדרגת...";
-  try{const x=await ask("קורות החיים:\n"+cv+"\n\n"+PREF+"\n\nהמשרה:\n"+t.slice(0,5000)+"\n\nדרגי 1-10 עד כמה כדאי לה לגשת. שקלי התאמה, חדשנות ברפואה, חברה ואנשים, עניין וייחודיות, תפקיד שטח, חלקית או פרילנס. תפקיד שגרתי = ציון נמוך. החזירי JSON בלבד: {\"title\":\"\",\"company\":\"\",\"location\":\"\",\"score\":0,\"reason\":\"עד 20 מילים בעברית\",\"part\":false,\"innov\":false}","claude-haiku-5-5",400);
+  try{const x=await ask("קורות החיים:\n"+cv+"\n\n"+PREF+"\n\nהמשרה:\n"+t.slice(0,5000)+"\n\nדרגי 1-10 עד כמה כדאי לה לגשת. שקלי התאמה, חדשנות ברפואה, חברה ואנשים, עניין וייחודיות, תפקיד שטח, חלקית או פרילנס. תפקיד שגרתי = ציון נמוך. החזירי JSON בלבד: {\"title\":\"\",\"company\":\"\",\"location\":\"\",\"score\":0,\"fit\":\"מה מתאים לה, עד 25 מילים\",\"gap\":\"מה פחות מתאים או חסר, עד 25 מילים\",\"part\":false,\"innov\":false}","claude-haiku-5-5",400);
     const r=JSON.parse(x.match(/\{[\s\S]*\}/)[0]);
-    mj.unshift({id:"m"+Date.now(),title:String(r.title||"משרה"),company:String(r.company||""),location:String(r.location||""),url:/^https:\/\//.test(u)?u:"",score:Math.max(1,Math.min(10,Math.round(+r.score||5))),reason:String(r.reason||""),part:!!r.part,innov:!!r.innov,ts:Date.now(),text:t.slice(0,4000)});
+    mj.unshift({id:"m"+Date.now(),title:String(r.title||"משרה"),company:String(r.company||""),location:String(r.location||""),url:/^https:\/\//.test(u)?u:"",score:Math.max(1,Math.min(10,Math.round(+r.score||5))),reason:"",fit:String(r.fit||""),gap:String(r.gap||""),part:!!r.part,innov:!!r.innov,ts:Date.now(),text:t.slice(0,4000)});
     lset("mj",mj);render();$("#aTxt").value="";$("#aUrl").value="";m.textContent="";$("#dAdd").close()}
   catch(e){m.textContent=err(e)}$("#aGo").disabled=false};
 
@@ -153,7 +153,7 @@ document.querySelectorAll("[data-close]").forEach(b=>b.onclick=()=>b.closest("di
 
 (async()=>{
   try{const r=await fetch("state.json?"+Date.now(),{cache:"no-store"});if(!r.ok)throw 0;const d=await r.json();
-    jobs=Object.entries(d.jobs||{}).filter(([i,v])=>v&&v.t&&!v.closed&&v.score>=(v.ai?5:4)).map(([id,v])=>({id,title:v.t,company:v.c||"",location:v.l||"",url:v.u||"",score:v.score,reason:v.r||"",part:!!v.part,innov:INN.test(v.t+" "+(v.c||"")+" "+(v.r||"")),ts:(v.ts||0)*1000}))}
+    jobs=Object.entries(d.jobs||{}).filter(([i,v])=>v&&v.t&&!v.closed&&v.score>=(v.ai?5:4)).map(([id,v])=>({id,title:v.t,company:v.c||"",location:v.l||"",url:v.u||"",score:v.score,reason:v.r||"",fit:v.f||"",gap:v.g||"",part:!!v.part,innov:INN.test(v.t+" "+(v.c||"")+" "+(v.r||"")),ts:(v.ts||0)*1000}))}
   catch(e){note("עדיין אין נתונים מהבוט. הריצי אותו מלשונית Actions ב-GitHub.")}
   render()})();
 </script>
